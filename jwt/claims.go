@@ -10,7 +10,7 @@ type BasicClaims struct {
 	Username string
 }
 
-func (configs *Configs) SignClaims(claims jwt.Claims) (string, error) {
+func SignClaims(claims jwt.Claims) (string, error) {
 	token := jwt.NewWithClaims(configs.method, claims)
 	tokenString, err := token.SignedString(configs.signKey)
 	if err != nil {
@@ -19,7 +19,7 @@ func (configs *Configs) SignClaims(claims jwt.Claims) (string, error) {
 	return tokenString, nil
 }
 
-func (configs *Configs) ValidateAuth(token string) (*BasicClaims, error) {
+func ValidateAuth(token string) (*BasicClaims, error) {
 	t, err := jwt.ParseWithClaims(token, new(BasicClaims), func(token *jwt.Token) (interface{}, error) {
 		return configs.verifyToken, nil
 	})

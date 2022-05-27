@@ -22,9 +22,13 @@ const (
 	RS256 SigningMethod = "rs256"
 )
 
+var (
+	configs *Configs
+)
+
 func LoadFromEnv(path string) (*Configs, error) {
 	var err error
-	configs := new(Configs)
+	configs = new(Configs)
 	if err = env.Load(path, configs); err != nil {
 		return nil, err
 	}
@@ -34,7 +38,8 @@ func LoadFromEnv(path string) (*Configs, error) {
 	return configs, nil
 }
 
-func Load(configs *Configs) error {
+func Load(remote *Configs) error {
+	configs = remote
 	var err error
 	if configs.PublicKey == "" {
 		return errors.New("invalid public key")
