@@ -2,7 +2,6 @@ package gormext
 
 import (
 	"fmt"
-	"regexp"
 )
 
 const dsnRegex = `^(?P<scheme>[^:]*):host=(?P<host>[^;]*);port=(?P<port>[^;]*);dbname=(?P<database>[^;]*)\?sslmode=(?P<ssl>[^:]*)?$`
@@ -39,12 +38,6 @@ func (c *Configs) generateDSN() string {
 
 func (c *Configs) rootDSN() string {
 	dsn := ""
-	if c.DSN != "" {
-		r, err := regexp.Compile(dsnRegex)
-		r.FindAll()
-		dsn = c.DSN
-	}
-	//^(?P<scheme>[^:]*):host=(?P<host>[^;]*);port=(?P<port>[^;]*);dbname=(?P<database>[^;]*)(\?sslmode=[^:]*){0,1}$
 	switch c.DbType {
 	case PostgreSQL:
 		dsn = fmt.Sprintf("postgresql://%v:%v@%v:%v?sslmode=%v", c.Username, c.Password, c.Host, "%v", "%v")
