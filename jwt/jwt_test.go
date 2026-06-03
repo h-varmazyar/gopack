@@ -106,3 +106,33 @@ func TestSignClaims(t *testing.T) {
 		t.Fatalf("expected Username bob, got %s", parsed.Username)
 	}
 }
+
+func TestHMACSigningHS256(t *testing.T) {
+	cfg := &Configs{
+		SecretKey: "my-secret-key-for-testing-purposes",
+		Method:    HS256,
+	}
+	if err := Load(cfg); err != nil {
+		t.Fatalf("failed to load jwt config: %v", err)
+	}
+
+	token, err := Login(LoginOptions{
+		UserID:    "user-3",
+		Username:  "charlie",
+		ExpiresIn: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Login with HMAC failed: %v", err)
+	}
+
+	claims, err := ValidateAuth(token)
+	if err != nil {
+		t.Fatalf("ValidateAuth with HMAC failed: %v", err)
+	}
+	if claims.UserID != "user-3" {
+		t.Fatalf("expected UserID user-3, got %s", claims.UserID)
+	}
+	if claims.Username != "charlie" {
+		t.Fatalf("expected Username charlie, got %s", claims.Username)
+	}
+}

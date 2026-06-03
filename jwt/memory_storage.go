@@ -1,46 +1,41 @@
 package jwt
 
 import (
+	"errors"
 	"sync"
-	"time"
 )
 
-type memoryTokenBlacklistStore struct {
+type memoryClaimsStore struct {
 	sync.RWMutex
-	data map[string]int64
+	data map[string]*AuthClaims
 }
 
-func newMemoryTokenBlacklistStore() *memoryTokenBlacklistStore {
-	return &memoryTokenBlacklistStore{data: make(map[string]int64)}
+func newMemoryClaimsStore() *memoryClaimsStore {
+	return &memoryClaimsStore{data: make(map[string]*AuthClaims)}
 }
 
-func (m *memoryTokenBlacklistStore) InvalidateToken(jti string, expiresAt int64) error {
+func (m *memoryClaimsStore) SaveClaims(claims *AuthClaims) error {
+	if claims == nil || claims.Id == "" {
+		return errors.New("invalid claims: missing JTI")
+	}
 	m.Lock()
 	defer m.Unlock()
-	m.data[jti] = expiresAt
+	m.data[claims.Id] = claims
 	return nil
 }
 
-func (m *memoryTokenBlacklistStore) IsTokenInvalidated(jti string) (bool, error) {
+func (m *memoryClaimsStore) GetClaims(jti string) (*AuthClaims, error) {
 	m.Lock()
 	defer m.Unlock()
-	if expiry, ok := m.data[jti]; ok {
-		if expiry == 0 || expiry > time.Now().Unix() {
-			return true, nil
-		}
-		delete(m.data, jti)
+	if claims, ok := m.data[jti]; ok {
+		return claims, nil
 	}
-	return false, nil
+	return nil, errors.New("claims not found")
 }
 
-func (m *memoryTokenBlacklistStore) CleanupExpired() error {
+func (m *memoryClaimsStore) DeleteClaims(jti string) error {
 	m.Lock()
 	defer m.Unlock()
-	now := time.Now().Unix()
-	for jti, expiry := range m.data {
-		if expiry != 0 && expiry <= now {
-			delete(m.data, jti)
-		}
-	}
+	delete(m.data, jti)
 	return nil
 }

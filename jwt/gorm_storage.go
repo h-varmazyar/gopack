@@ -2,60 +2,87 @@ package jwt
 
 import (
 	"errors"
-	"time"
 
+	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-type gormTokenBlacklistRecord struct {
-	ID        uint `gorm:"primaryKey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+type gormClaimsRecord struct {
+	gorm.Model
 	JTI       string `gorm:"uniqueIndex;size:128"`
+	UserID    string `gorm:"index;size:128"`
+	Username  string `gorm:"size:256"`
+	Subject   string `gorm:"size:256"`
+	Issuer    string `gorm:"size:256"`
+	IssuedAt  int64  `gorm:"index"`
 	ExpiresAt int64  `gorm:"index"`
+	Extra     string `gorm:"type:text"` // JSON encoded
 }
 
-type gormTokenBlacklistStore struct {
+type gormClaimsStore struct {
 	db *gorm.DB
 }
 
-func NewGormTokenBlacklistStore(db *gorm.DB) (TokenBlacklistStore, error) {
+func (s *gormClaimsStore) TableName() string {
+	return "jwt_users_tokens"
+}
+
+func NewGormClaimsStore(db *gorm.DB) (ClaimsStore, error) {
 	if db == nil {
 		return nil, errors.New("gorm DB is nil")
 	}
-	record := &gormTokenBlacklistRecord{}
+	record := &gormClaimsRecord{}
 	if err := db.AutoMigrate(record); err != nil {
 		return nil, err
 	}
-	return &gormTokenBlacklistStore{db: db}, nil
+	return &gormClaimsStore{db: db}, nil
 }
 
-func (s *gormTokenBlacklistStore) InvalidateToken(jti string, expiresAt int64) error {
-	record := gormTokenBlacklistRecord{JTI: jti, ExpiresAt: expiresAt}
+func (s *gormClaimsStore) SaveClaims(claims *AuthClaims) error {
+	if claims == nil || claims.Id == "" {
+		return errors.New("invalid claims: missing JTI")
+	}
+
+	record := gormClaimsRecord{
+		JTI:       claims.Id,
+		UserID:    claims.UserID,
+		Username:  claims.Username,
+		Subject:   claims.Subject,
+		Issuer:    claims.Issuer,
+		IssuedAt:  claims.IssuedAt,
+		ExpiresAt: claims.ExpiresAt,
+	}
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "jti"}},
-		DoUpdates: clause.AssignmentColumns([]string{"expires_at", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"user_id", "username", "subject", "issuer", "issued_at", "expires_at", "updated_at"}),
 	}).Create(&record).Error
 }
 
-func (s *gormTokenBlacklistStore) IsTokenInvalidated(jti string) (bool, error) {
-	var record gormTokenBlacklistRecord
+func (s *gormClaimsStore) GetClaims(jti string) (*AuthClaims, error) {
+	var record gormClaimsRecord
 	err := s.db.Where("jti = ?", jti).First(&record).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+		return nil, errors.New("claims not found")
 	}
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	now := time.Now().Unix()
-	if record.ExpiresAt == 0 || record.ExpiresAt > now {
-		return true, nil
+
+	claims := &AuthClaims{
+		StandardClaims: jwt.StandardClaims{
+			Id:        record.JTI,
+			Subject:   record.Subject,
+			Issuer:    record.Issuer,
+			IssuedAt:  record.IssuedAt,
+			ExpiresAt: record.ExpiresAt,
+		},
+		UserID:   record.UserID,
+		Username: record.Username,
 	}
-	_ = s.db.Delete(&record).Error
-	return false, nil
+	return claims, nil
 }
 
-func (s *gormTokenBlacklistStore) CleanupExpired() error {
-	return s.db.Where("expires_at <= ?", time.Now().Unix()).Delete(&gormTokenBlacklistRecord{}).Error
+func (s *gormClaimsStore) DeleteClaims(jti string) error {
+	return s.db.Where("jti = ?", jti).Delete(&gormClaimsRecord{}).Error
 }
